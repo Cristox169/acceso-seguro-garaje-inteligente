@@ -23,22 +23,28 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.LocalParking
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Sensors
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.TipsAndUpdates
 import androidx.compose.material.icons.filled.WarningAmber
+import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -47,11 +53,13 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -66,6 +74,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -73,6 +84,11 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import cl.jarax.garajeinteligente.data.AppDatabaseHelper
+import cl.jarax.garajeinteligente.data.SensorReading
+import cl.jarax.garajeinteligente.network.LanIoTManager
+import cl.jarax.garajeinteligente.network.LanRole
+import cl.jarax.garajeinteligente.network.LanStatus
 
 @Composable
 fun AccesoSeguroApp(
@@ -80,11 +96,63 @@ fun AccesoSeguroApp(
     onOnboardingComplete: () -> Unit,
     onRestartOnboarding: () -> Unit,
 ) {
+    val context = LocalContext.current
+    val database = remember { AppDatabaseHelper(context.applicationContext) }
+    val lanManager = remember { LanIoTManager() }
+    var authenticated by rememberSaveable { mutableStateOf(false) }
+    var loginError by rememberSaveable { mutableStateOf<String?>(null) }
     var isNight by rememberSaveable { mutableStateOf(true) }
     var approaching by rememberSaveable { mutableStateOf(false) }
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     var onboardingComplete by rememberSaveable { mutableStateOf(initialOnboardingComplete) }
     var onboardingStep by rememberSaveable { mutableIntStateOf(0) }
+    var lanStatus by remember { mutableStateOf(LanStatus()) }
+    var remotePayload by remember { mutableStateOf<String?>(null) }
+    var readings by remember { mutableStateOf(database.latestReadings()) }
+
+    DisposableEffect(lanManager, database) {
+        lanManager.onStatusChanged = { lanStatus = it }
+        lanManager.onPayloadReceived = { payload ->
+            remotePayload = payload
+            decodeReading(payload)?.let { remote ->
+                database.addReading(
+                    lightLux = remote.lightLux,
+                    distanceCm = remote.distanceCm,
+                    gateOpen = remote.gateOpen,
+                    alertActive = remote.alertActive,
+                    source = "Dispositivo remoto",
+                )
+                readings = database.latestReadings()
+            }
+        }
+        onDispose {
+            lanManager.disconnect()
+            database.close()
+        }
+    }
+
+    fun recordAndTransmit(night: Boolean, near: Boolean) {
+        val lux = if (night) 18 else 248
+        val distance = if (!night) null else if (near) 60 else 280
+        database.addReading(lux, distance, near && night, near && night)
+        readings = database.latestReadings()
+        lanManager.sendPayload(encodeReading(lux, distance, near && night, near && night))
+    }
+
+    if (!authenticated) {
+        LoginScreen(
+            errorMessage = loginError,
+            onLogin = { username, password ->
+                if (database.authenticate(username, password)) {
+                    authenticated = true
+                    loginError = null
+                } else {
+                    loginError = "Usuario o contraseña incorrectos"
+                }
+            },
+        )
+        return
+    }
 
     if (!onboardingComplete) {
         OnboardingScreen(
@@ -121,15 +189,29 @@ fun AccesoSeguroApp(
                 NavigationBarItem(
                     selected = selectedTab == 1,
                     onClick = { selectedTab = 1 },
-                    icon = { Icon(Icons.Filled.AccountTree, contentDescription = null) },
-                    label = { Text("Cómo funciona") },
+                    icon = { Icon(Icons.Filled.Wifi, contentDescription = null) },
+                    label = { Text("Conexión", fontSize = 10.sp) },
                     colors = navColors(),
                 )
                 NavigationBarItem(
                     selected = selectedTab == 2,
                     onClick = { selectedTab = 2 },
+                    icon = { Icon(Icons.Filled.History, contentDescription = null) },
+                    label = { Text("Datos", fontSize = 10.sp) },
+                    colors = navColors(),
+                )
+                NavigationBarItem(
+                    selected = selectedTab == 3,
+                    onClick = { selectedTab = 3 },
+                    icon = { Icon(Icons.Filled.AccountTree, contentDescription = null) },
+                    label = { Text("Sistema", fontSize = 10.sp) },
+                    colors = navColors(),
+                )
+                NavigationBarItem(
+                    selected = selectedTab == 4,
+                    onClick = { selectedTab = 4 },
                     icon = { Icon(Icons.Filled.Settings, contentDescription = null) },
-                    label = { Text("Ajustes") },
+                    label = { Text("Ajustes", fontSize = 10.sp) },
                     colors = navColors(),
                 )
             }
@@ -142,11 +224,34 @@ fun AccesoSeguroApp(
                 onNightChange = {
                     isNight = it
                     if (!it) approaching = false
+                    recordAndTransmit(it, if (it) approaching else false)
                 },
-                onApproachChange = { approaching = it },
+                onApproachChange = {
+                    approaching = it
+                    recordAndTransmit(isNight, it)
+                },
                 modifier = Modifier.padding(innerPadding),
             )
         } else if (selectedTab == 1) {
+            ConnectionScreen(
+                status = lanStatus,
+                remotePayload = remotePayload,
+                onStartController = lanManager::startController,
+                onConnectMonitor = lanManager::connectAsMonitor,
+                onDisconnect = lanManager::disconnect,
+                modifier = Modifier.padding(innerPadding),
+            )
+        } else if (selectedTab == 2) {
+            HistoryScreen(
+                readings = readings,
+                onRefresh = { readings = database.latestReadings() },
+                onClear = {
+                    database.clearReadings()
+                    readings = emptyList()
+                },
+                modifier = Modifier.padding(innerPadding),
+            )
+        } else if (selectedTab == 3) {
             HowItWorks(modifier = Modifier.padding(innerPadding))
         } else {
             SettingsScreen(
@@ -155,8 +260,108 @@ fun AccesoSeguroApp(
                     onboardingComplete = false
                     onRestartOnboarding()
                 },
+                onLogout = {
+                    lanManager.disconnect()
+                    authenticated = false
+                    selectedTab = 0
+                },
                 modifier = Modifier.padding(innerPadding),
             )
+        }
+    }
+}
+
+private data class RemoteReading(
+    val lightLux: Int,
+    val distanceCm: Int?,
+    val gateOpen: Boolean,
+    val alertActive: Boolean,
+)
+
+private fun encodeReading(lightLux: Int, distanceCm: Int?, gateOpen: Boolean, alertActive: Boolean): String =
+    listOf("v1", System.currentTimeMillis(), lightLux, distanceCm ?: -1, gateOpen, alertActive).joinToString("|")
+
+private fun decodeReading(payload: String): RemoteReading? {
+    val parts = payload.split('|')
+    if (parts.size != 6 || parts[0] != "v1") return null
+    return runCatching {
+        RemoteReading(
+            lightLux = parts[2].toInt(),
+            distanceCm = parts[3].toInt().takeIf { it >= 0 },
+            gateOpen = parts[4].toBooleanStrict(),
+            alertActive = parts[5].toBooleanStrict(),
+        )
+    }.getOrNull()
+}
+
+@Composable
+private fun LoginScreen(
+    errorMessage: String?,
+    onLogin: (String, String) -> Unit,
+) {
+    var username by rememberSaveable { mutableStateOf(AppDatabaseHelper.DEMO_USER) }
+    var password by rememberSaveable { mutableStateOf(AppDatabaseHelper.DEMO_PASSWORD) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Ink)
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 24.dp, vertical = 28.dp),
+        verticalArrangement = Arrangement.Center,
+    ) {
+        BrandHeader()
+        Spacer(Modifier.height(36.dp))
+        Icon(Icons.Filled.Security, contentDescription = null, tint = Mint, modifier = Modifier.size(44.dp))
+        Spacer(Modifier.height(16.dp))
+        Text("Acceso de operador", color = TextMain, fontSize = 30.sp, lineHeight = 36.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "Inicia sesión para controlar el garaje y consultar los datos de los sensores.",
+            color = TextMuted,
+            fontSize = 14.sp,
+            lineHeight = 20.sp,
+        )
+        Spacer(Modifier.height(24.dp))
+        Surface(color = Panel, shape = RoundedCornerShape(22.dp), modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                OutlinedTextField(
+                    value = username,
+                    onValueChange = { username = it },
+                    label = { Text("Usuario") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                )
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = { password = it },
+                    label = { Text("Contraseña") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                )
+                if (errorMessage != null) {
+                    Text(errorMessage, color = Red, fontSize = 12.sp)
+                }
+                Button(
+                    onClick = { onLogin(username, password) },
+                    modifier = Modifier.fillMaxWidth().height(50.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink),
+                ) {
+                    Icon(Icons.Filled.LockOpen, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Ingresar", fontWeight = FontWeight.Bold)
+                }
+                Text(
+                    "Cuenta de demostración: operador / Acceso2026!\nLa contraseña se valida mediante PBKDF2 y se almacena como hash con sal en SQLite.",
+                    color = TextMuted,
+                    fontSize = 11.sp,
+                    lineHeight = 16.sp,
+                )
+            }
         }
     }
 }
@@ -739,6 +944,171 @@ private fun FlowNode(label: String, detail: String, active: Boolean, modifier: M
 }
 
 @Composable
+private fun ConnectionScreen(
+    status: LanStatus,
+    remotePayload: String?,
+    onStartController: (String) -> Unit,
+    onConnectMonitor: (String, String) -> Unit,
+    onDisconnect: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var hostAddress by rememberSaveable { mutableStateOf("") }
+    var pairingCode by rememberSaveable { mutableStateOf(LanIoTManager.DEFAULT_CODE) }
+    val remoteReading = remotePayload?.let(::decodeReading)
+
+    Column(
+        modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(top = 14.dp, bottom = 28.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        BrandHeader()
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("Conectar dos\ndispositivos.", fontSize = 29.sp, lineHeight = 35.sp, color = TextMain, fontWeight = FontWeight.Bold)
+            Text("Usa dos teléfonos en la misma red Wi-Fi: uno controla y el otro monitorea.", color = TextMuted, fontSize = 13.sp, lineHeight = 19.sp)
+        }
+
+        Surface(color = Panel, shape = RoundedCornerShape(22.dp), modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(13.dp)) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Text("Estado de la conexión", color = TextMain, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                        Text(status.message, color = TextMuted, fontSize = 12.sp, lineHeight = 17.sp)
+                    }
+                    StatusBadge(if (status.connected) "CONECTADO" else "LOCAL", if (status.connected) Mint else Amber)
+                }
+                Text("IP de este dispositivo: ${status.localAddress}", color = MintSoft, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                Text("Puerto: ${LanIoTManager.PORT}", color = TextMuted, fontSize = 11.sp)
+            }
+        }
+
+        Surface(color = Panel, shape = RoundedCornerShape(22.dp), modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(13.dp)) {
+                Text("Código de vinculación", color = TextMain, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                OutlinedTextField(
+                    value = pairingCode,
+                    onValueChange = { pairingCode = it },
+                    label = { Text("Mismo código en ambos teléfonos") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Button(
+                    onClick = { onStartController(pairingCode) },
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink),
+                ) {
+                    Icon(Icons.Filled.Wifi, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Este teléfono controla", fontWeight = FontWeight.SemiBold)
+                }
+                Text("En el segundo teléfono escribe la IP mostrada arriba y selecciona el modo monitor.", color = TextMuted, fontSize = 11.sp, lineHeight = 16.sp)
+            }
+        }
+
+        Surface(color = Panel, shape = RoundedCornerShape(22.dp), modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(13.dp)) {
+                Text("Conectarse como monitor", color = TextMain, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                OutlinedTextField(
+                    value = hostAddress,
+                    onValueChange = { hostAddress = it },
+                    label = { Text("IP del teléfono controlador") },
+                    placeholder = { Text("192.168.1.25") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedButton(
+                    onClick = { onConnectMonitor(hostAddress, pairingCode) },
+                    enabled = hostAddress.isNotBlank(),
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    shape = RoundedCornerShape(14.dp),
+                ) {
+                    Text("Conectar este teléfono como monitor", fontWeight = FontWeight.SemiBold)
+                }
+            }
+        }
+
+        if (status.role != LanRole.DISCONNECTED) {
+            OutlinedButton(onClick = onDisconnect, modifier = Modifier.fillMaxWidth().height(46.dp), shape = RoundedCornerShape(14.dp)) {
+                Text("Desconectar")
+            }
+        }
+
+        if (remoteReading != null) {
+            Surface(color = PanelRaised, shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Última lectura remota", color = TextMain, fontWeight = FontWeight.SemiBold)
+                    Text("Luz: ${remoteReading.lightLux} lx · Distancia: ${remoteReading.distanceCm?.let { "$it cm" } ?: "en pausa"}", color = TextMuted, fontSize = 12.sp)
+                    Text(if (remoteReading.gateOpen) "Barrera abierta · alerta activa" else "Barrera cerrada · sin alerta", color = if (remoteReading.alertActive) Red else Mint, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                }
+            }
+        }
+
+        Surface(color = PanelRaised, shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
+            Row(Modifier.padding(15.dp), verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Icon(Icons.Filled.Security, contentDescription = null, tint = Mint, modifier = Modifier.size(20.dp))
+                Text("Los mensajes viajan cifrados con AES-GCM. El código de vinculación debe coincidir en ambos dispositivos y no se guarda en la base de datos.", color = TextMuted, fontSize = 12.sp, lineHeight = 18.sp)
+            }
+        }
+    }
+}
+
+@Composable
+private fun HistoryScreen(
+    readings: List<SensorReading>,
+    onRefresh: () -> Unit,
+    onClear: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(top = 14.dp, bottom = 28.dp),
+        verticalArrangement = Arrangement.spacedBy(15.dp),
+    ) {
+        BrandHeader()
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("Historial de\nsensores.", fontSize = 29.sp, lineHeight = 35.sp, color = TextMain, fontWeight = FontWeight.Bold)
+            Text("SQLite conserva las últimas lecturas locales y recibidas desde otro teléfono.", color = TextMuted, fontSize = 13.sp, lineHeight = 19.sp)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Button(onClick = onRefresh, modifier = Modifier.weight(1f), shape = RoundedCornerShape(13.dp), colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink)) {
+                Icon(Icons.Filled.Refresh, contentDescription = null, modifier = Modifier.size(17.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Actualizar")
+            }
+            OutlinedButton(onClick = onClear, modifier = Modifier.weight(1f), shape = RoundedCornerShape(13.dp), enabled = readings.isNotEmpty()) {
+                Text("Limpiar")
+            }
+        }
+        if (readings.isEmpty()) {
+            Surface(color = Panel, shape = RoundedCornerShape(20.dp), modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Icon(Icons.Filled.Storage, contentDescription = null, tint = TextMuted, modifier = Modifier.size(34.dp))
+                    Text("Todavía no hay lecturas", color = TextMain, fontWeight = FontWeight.SemiBold)
+                    Text("Cambia entre día y noche o simula un vehículo desde el Panel.", color = TextMuted, fontSize = 12.sp, textAlign = TextAlign.Center)
+                }
+            }
+        } else {
+            readings.forEach { reading -> ReadingRow(reading) }
+        }
+        Text("Los datos se almacenan solo en este dispositivo y pueden eliminarse desde esta pantalla.", color = TextMuted, fontSize = 11.sp, lineHeight = 16.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+    }
+}
+
+@Composable
+private fun ReadingRow(reading: SensorReading) {
+    Surface(color = Panel, shape = RoundedCornerShape(17.dp), modifier = Modifier.fillMaxWidth()) {
+        Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Box(Modifier.size(39.dp).clip(RoundedCornerShape(12.dp)).background((if (reading.alertActive) Red else Mint).copy(alpha = .12f)), contentAlignment = Alignment.Center) {
+                Icon(if (reading.alertActive) Icons.Filled.WarningAmber else Icons.Filled.Sensors, contentDescription = null, tint = if (reading.alertActive) Red else Mint, modifier = Modifier.size(20.dp))
+            }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text("${reading.lightLux} lx · ${reading.distanceCm?.let { "$it cm" } ?: "sensor en pausa"}", color = TextMain, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                Text("${reading.source} · ${reading.formattedTime()}", color = TextMuted, fontSize = 11.sp)
+                Text(if (reading.gateOpen) "Barrera abierta" else "Barrera cerrada", color = if (reading.alertActive) Red else MintSoft, fontSize = 11.sp)
+            }
+        }
+    }
+}
+
+@Composable
 private fun HowItWorks(modifier: Modifier = Modifier) {
     Column(
         modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(top = 14.dp, bottom = 28.dp),
@@ -747,14 +1117,16 @@ private fun HowItWorks(modifier: Modifier = Modifier) {
         BrandHeader()
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("Así piensa tu\nportero inteligente.", fontSize = 29.sp, lineHeight = 35.sp, color = TextMain, fontWeight = FontWeight.Bold)
-            Text("Un circuito que cuida el acceso y evita gastar energía de más.", color = TextMuted, fontSize = 13.sp, lineHeight = 19.sp)
+            Text("Control, monitoreo y registro seguro para el acceso inteligente.", color = TextMuted, fontSize = 13.sp, lineHeight = 19.sp)
         }
         Surface(color = Panel, shape = RoundedCornerShape(22.dp), modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(0.dp)) {
                 ProcessStep("01", "Detectar la oscuridad", "La fotorresistencia (LDR) mide la luz ambiente. De día, el sistema deja los actuadores apagados.", Icons.Filled.LightMode, Mint, last = false)
                 ProcessStep("02", "Buscar obstáculos", "Al detectar noche, se activa el sensor ultrasónico y mide si un vehículo o una persona se acerca.", Icons.Filled.Sensors, Mint, last = false)
                 ProcessStep("03", "Abrir y alertar", "Si algo está cerca, el servomotor levanta la barrera y las luces rojas avisan que hay movimiento.", Icons.Filled.WarningAmber, Red, last = false)
-                ProcessStep("04", "Volver a reposo", "Cuando el acceso queda libre, la barrera baja y la alerta se apaga. Con luz de día, el sistema ahorra energía.", Icons.Filled.CheckCircle, Amber, last = true)
+                ProcessStep("04", "Guardar la lectura", "Cada cambio se registra en SQLite con fecha, luz, distancia, barrera, alerta y dispositivo de origen.", Icons.Filled.Storage, Mint, last = false)
+                ProcessStep("05", "Compartir por Wi-Fi", "El teléfono controlador envía lecturas cifradas al teléfono monitor conectado en la misma red local.", Icons.Filled.Wifi, Mint, last = false)
+                ProcessStep("06", "Volver a reposo", "Cuando el acceso queda libre, la barrera baja y la alerta se apaga. Con luz de día, el sistema ahorra energía.", Icons.Filled.CheckCircle, Amber, last = true)
             }
         }
         Text("Componentes del prototipo", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = TextMain)
@@ -762,17 +1134,20 @@ private fun HowItWorks(modifier: Modifier = Modifier) {
         ComponentRow("HC-SR04", "Sensor ultrasónico", "Mide distancia a un obstáculo", Icons.Filled.Sensors)
         ComponentRow("SG90", "Servomotor", "Levanta y baja la barrera", Icons.Filled.LocalParking)
         ComponentRow("LED rojo", "Luz de alerta", "Indica que el acceso está activo", Icons.Filled.WarningAmber)
+        ComponentRow("Wi-Fi", "Interconexión Android", "Envía lecturas entre dos teléfonos", Icons.Filled.Wifi)
+        ComponentRow("SQLite", "Almacenamiento local", "Conserva usuarios y datos de sensores", Icons.Filled.Storage)
+        ComponentRow("AES-GCM", "Seguridad IoT", "Protege los mensajes de la red local", Icons.Filled.Security)
         Surface(color = PanelRaised, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
             Row(Modifier.padding(14.dp), verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Icon(Icons.Filled.TipsAndUpdates, contentDescription = null, tint = Mint, modifier = Modifier.size(19.dp))
-                Text("Este prototipo se presenta como simulación de la lógica del circuito. Para controlar componentes reales se requiere una conexión compatible con la placa.", color = TextMuted, fontSize = 11.sp, lineHeight = 16.sp)
+                Text("La lectura de sensores y los actuadores se simulan en pantalla. La comunicación Wi-Fi entre dos dispositivos Android y el almacenamiento SQLite sí funcionan dentro de la aplicación.", color = TextMuted, fontSize = 11.sp, lineHeight = 16.sp)
             }
         }
     }
 }
 
 @Composable
-private fun SettingsScreen(onReplayIntro: () -> Unit, modifier: Modifier = Modifier) {
+private fun SettingsScreen(onReplayIntro: () -> Unit, onLogout: () -> Unit, modifier: Modifier = Modifier) {
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -784,13 +1159,20 @@ private fun SettingsScreen(onReplayIntro: () -> Unit, modifier: Modifier = Modif
         BrandHeader()
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("Ajustes", fontSize = 29.sp, lineHeight = 35.sp, color = TextMain, fontWeight = FontWeight.Bold)
-            Text("Preferencias de la demostración del circuito.", color = TextMuted, fontSize = 14.sp, lineHeight = 20.sp)
+            Text("Preferencias, seguridad y sesión del operador.", color = TextMuted, fontSize = 14.sp, lineHeight = 20.sp)
         }
         Surface(color = Panel, shape = RoundedCornerShape(20.dp), modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("Modo de funcionamiento", color = TextMain, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                Text("La aplicación funciona de manera local como simulador. Las lecturas y acciones se representan en pantalla; no hay una placa conectada.", color = TextMuted, fontSize = 13.sp, lineHeight = 19.sp)
-                StatusBadge(text = "SIN HARDWARE VINCULADO", color = Amber)
+                Text("Los sensores y actuadores se simulan. Las lecturas se guardan en SQLite y pueden enviarse de forma cifrada a otro Android por la red Wi-Fi local.", color = TextMuted, fontSize = 13.sp, lineHeight = 19.sp)
+                StatusBadge(text = "IOT DEMOSTRABLE", color = Mint)
+            }
+        }
+        Surface(color = Panel, shape = RoundedCornerShape(20.dp), modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                Text("Seguridad IoT", color = TextMain, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                Text("• Contraseñas con PBKDF2, sal aleatoria y comparación constante.\n• Mensajes entre dispositivos cifrados y autenticados con AES-GCM.\n• Código de vinculación temporal y almacenamiento local controlado por el usuario.\n• Sin permisos de ubicación, cámara ni contactos.", color = TextMuted, fontSize = 12.sp, lineHeight = 19.sp)
+                StatusBadge(text = "ALINEADO CON ISO/IEC 27400", color = Mint)
             }
         }
         Surface(color = Panel, shape = RoundedCornerShape(20.dp), modifier = Modifier.fillMaxWidth()) {
@@ -809,12 +1191,22 @@ private fun SettingsScreen(onReplayIntro: () -> Unit, modifier: Modifier = Modif
         }
         Surface(color = PanelRaised, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
             Text(
-                "No se crea una cuenta ni se solicitan permisos de red, ubicación o Bluetooth. Para usar componentes reales, primero se debe agregar una conexión compatible con la placa.",
+                "La aplicación solicita únicamente acceso a red para la interconexión Wi-Fi. No usa ubicación, cámara, micrófono ni contactos.",
                 modifier = Modifier.padding(15.dp),
                 color = TextMuted,
                 fontSize = 12.sp,
                 lineHeight = 18.sp,
             )
+        }
+        OutlinedButton(
+            onClick = onLogout,
+            modifier = Modifier.fillMaxWidth().height(48.dp),
+            shape = RoundedCornerShape(14.dp),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = Red),
+        ) {
+            Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("Cerrar sesión", fontWeight = FontWeight.SemiBold)
         }
     }
 }
