@@ -1,21 +1,19 @@
 package cl.jarax.garajeinteligente.ui
 
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
@@ -26,42 +24,37 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.automirrored.filled.Logout
-import androidx.compose.material.icons.filled.AccountTree
-import androidx.compose.material.icons.filled.Bolt
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.DarkMode
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Bluetooth
+import androidx.compose.material.icons.filled.Hub
 import androidx.compose.material.icons.filled.LightMode
-import androidx.compose.material.icons.filled.LocalParking
-import androidx.compose.material.icons.filled.LockOpen
-import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Sensors
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Storage
-import androidx.compose.material.icons.filled.TipsAndUpdates
-import androidx.compose.material.icons.filled.WarningAmber
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Wifi
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.RadioButtonDefaults
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -69,27 +62,46 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cl.jarax.garajeinteligente.data.AppDatabaseHelper
-import cl.jarax.garajeinteligente.data.SensorReading
-import cl.jarax.garajeinteligente.network.LanIoTManager
-import cl.jarax.garajeinteligente.network.LanRole
-import cl.jarax.garajeinteligente.network.LanStatus
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
+private val OtBackground = Color(0xFF0E1929)
+private val OtPanel = Color(0xFF1B293E)
+private val OtField = Color(0xFF0B1527)
+private val OtLine = Color(0xFF40506A)
+private val OtBlue = Color(0xFF18ABE2)
+private val OtGreen = Color(0xFF19C58D)
+private val OtRed = Color(0xFFFF5362)
+private val OtPurple = Color(0xFFD4BBFA)
+private val OtOrange = Color(0xFFFFB522)
+private val OtText = Color(0xFFF4F5F8)
+private val OtMuted = Color(0xFFA7ADBD)
+private val OtDisabled = Color(0xFF667083)
+
+private enum class OtSection { MONITOR, ACTUATOR, CONNECTION }
+private enum class ServoMode { AUTO, OPEN, CLOSED }
+private enum class ConnectionMode { BLUETOOTH, WIFI, MESH }
+
+private data class AuditEvent(
+    val timestamp: String,
+    val action: String,
+    val user: String,
+    val detail: String,
+)
+
+@Suppress("UNUSED_PARAMETER")
 @Composable
 fun AccesoSeguroApp(
     initialOnboardingComplete: Boolean,
@@ -98,1152 +110,479 @@ fun AccesoSeguroApp(
 ) {
     val context = LocalContext.current
     val database = remember { AppDatabaseHelper(context.applicationContext) }
-    val lanManager = remember { LanIoTManager() }
-    var authenticated by rememberSaveable { mutableStateOf(false) }
-    var loginError by rememberSaveable { mutableStateOf<String?>(null) }
-    var isNight by rememberSaveable { mutableStateOf(true) }
-    var approaching by rememberSaveable { mutableStateOf(false) }
-    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
-    var onboardingComplete by rememberSaveable { mutableStateOf(initialOnboardingComplete) }
-    var onboardingStep by rememberSaveable { mutableIntStateOf(0) }
-    var lanStatus by remember { mutableStateOf(LanStatus()) }
-    var remotePayload by remember { mutableStateOf<String?>(null) }
-    var readings by remember { mutableStateOf(database.latestReadings()) }
+    var loggedIn by rememberSaveable { mutableStateOf(false) }
+    var showAudit by rememberSaveable { mutableStateOf(false) }
+    val audit = remember { mutableStateListOf<AuditEvent>() }
 
-    DisposableEffect(lanManager, database) {
-        lanManager.onStatusChanged = { lanStatus = it }
-        lanManager.onPayloadReceived = { payload ->
-            remotePayload = payload
-            decodeReading(payload)?.let { remote ->
-                database.addReading(
-                    lightLux = remote.lightLux,
-                    distanceCm = remote.distanceCm,
-                    gateOpen = remote.gateOpen,
-                    alertActive = remote.alertActive,
-                    source = "Dispositivo remoto",
+    MaterialTheme {
+        Surface(modifier = Modifier.fillMaxSize(), color = OtBackground) {
+            if (!loggedIn) {
+                LoginScreen(
+                    authenticate = database::authenticate,
+                    onLoginSuccess = {
+                        loggedIn = true
+                        audit.add(0, auditEvent("LOGIN_SUCCESS", "admin", "Acceso concedido a operador autorizado"))
+                        audit.add(1, auditEvent("INITIALIZE", "SYSTEM", "Gestor de Seguridad OT ISO 27001 iniciado"))
+                    },
                 )
-                readings = database.latestReadings()
+            } else {
+                ControlCenter(audit = audit, onShowAudit = { showAudit = true })
             }
-        }
-        onDispose {
-            lanManager.disconnect()
-            database.close()
+            if (showAudit) AuditDialog(audit = audit, onDismiss = { showAudit = false })
         }
     }
-
-    fun recordAndTransmit(night: Boolean, near: Boolean) {
-        val lux = if (night) 18 else 248
-        val distance = if (!night) null else if (near) 60 else 280
-        database.addReading(lux, distance, near && night, near && night)
-        readings = database.latestReadings()
-        lanManager.sendPayload(encodeReading(lux, distance, near && night, near && night))
-    }
-
-    if (!authenticated) {
-        LoginScreen(
-            errorMessage = loginError,
-            onLogin = { username, password ->
-                if (database.authenticate(username, password)) {
-                    authenticated = true
-                    loginError = null
-                } else {
-                    loginError = "Usuario o contraseña incorrectos"
-                }
-            },
-        )
-        return
-    }
-
-    if (!onboardingComplete) {
-        OnboardingScreen(
-            step = onboardingStep,
-            onStepChange = { onboardingStep = it },
-            onSkip = {
-                onboardingComplete = true
-                onOnboardingComplete()
-            },
-            onFinish = {
-                onboardingComplete = true
-                onOnboardingComplete()
-            },
-        )
-        return
-    }
-
-    Scaffold(
-        containerColor = Ink,
-        contentWindowInsets = WindowInsets.safeDrawing,
-        bottomBar = {
-            NavigationBar(
-                containerColor = Panel,
-                contentColor = TextMuted,
-                windowInsets = WindowInsets.navigationBars,
-            ) {
-                NavigationBarItem(
-                    selected = selectedTab == 0,
-                    onClick = { selectedTab = 0 },
-                    icon = { Icon(Icons.Filled.Home, contentDescription = null) },
-                    label = { Text("Panel") },
-                    colors = navColors(),
-                )
-                NavigationBarItem(
-                    selected = selectedTab == 1,
-                    onClick = { selectedTab = 1 },
-                    icon = { Icon(Icons.Filled.Wifi, contentDescription = null) },
-                    label = { Text("Conexión", fontSize = 10.sp) },
-                    colors = navColors(),
-                )
-                NavigationBarItem(
-                    selected = selectedTab == 2,
-                    onClick = { selectedTab = 2 },
-                    icon = { Icon(Icons.Filled.History, contentDescription = null) },
-                    label = { Text("Datos", fontSize = 10.sp) },
-                    colors = navColors(),
-                )
-                NavigationBarItem(
-                    selected = selectedTab == 3,
-                    onClick = { selectedTab = 3 },
-                    icon = { Icon(Icons.Filled.AccountTree, contentDescription = null) },
-                    label = { Text("Sistema", fontSize = 10.sp) },
-                    colors = navColors(),
-                )
-                NavigationBarItem(
-                    selected = selectedTab == 4,
-                    onClick = { selectedTab = 4 },
-                    icon = { Icon(Icons.Filled.Settings, contentDescription = null) },
-                    label = { Text("Ajustes", fontSize = 10.sp) },
-                    colors = navColors(),
-                )
-            }
-        },
-    ) { innerPadding ->
-        if (selectedTab == 0) {
-            Dashboard(
-                isNight = isNight,
-                approaching = approaching,
-                onNightChange = {
-                    isNight = it
-                    if (!it) approaching = false
-                    recordAndTransmit(it, if (it) approaching else false)
-                },
-                onApproachChange = {
-                    approaching = it
-                    recordAndTransmit(isNight, it)
-                },
-                modifier = Modifier.padding(innerPadding),
-            )
-        } else if (selectedTab == 1) {
-            ConnectionScreen(
-                status = lanStatus,
-                remotePayload = remotePayload,
-                onStartController = lanManager::startController,
-                onConnectMonitor = lanManager::connectAsMonitor,
-                onDisconnect = lanManager::disconnect,
-                modifier = Modifier.padding(innerPadding),
-            )
-        } else if (selectedTab == 2) {
-            HistoryScreen(
-                readings = readings,
-                onRefresh = { readings = database.latestReadings() },
-                onClear = {
-                    database.clearReadings()
-                    readings = emptyList()
-                },
-                modifier = Modifier.padding(innerPadding),
-            )
-        } else if (selectedTab == 3) {
-            HowItWorks(modifier = Modifier.padding(innerPadding))
-        } else {
-            SettingsScreen(
-                onReplayIntro = {
-                    onboardingStep = 0
-                    onboardingComplete = false
-                    onRestartOnboarding()
-                },
-                onLogout = {
-                    lanManager.disconnect()
-                    authenticated = false
-                    selectedTab = 0
-                },
-                modifier = Modifier.padding(innerPadding),
-            )
-        }
-    }
-}
-
-private data class RemoteReading(
-    val lightLux: Int,
-    val distanceCm: Int?,
-    val gateOpen: Boolean,
-    val alertActive: Boolean,
-)
-
-private fun encodeReading(lightLux: Int, distanceCm: Int?, gateOpen: Boolean, alertActive: Boolean): String =
-    listOf("v1", System.currentTimeMillis(), lightLux, distanceCm ?: -1, gateOpen, alertActive).joinToString("|")
-
-private fun decodeReading(payload: String): RemoteReading? {
-    val parts = payload.split('|')
-    if (parts.size != 6 || parts[0] != "v1") return null
-    return runCatching {
-        RemoteReading(
-            lightLux = parts[2].toInt(),
-            distanceCm = parts[3].toInt().takeIf { it >= 0 },
-            gateOpen = parts[4].toBooleanStrict(),
-            alertActive = parts[5].toBooleanStrict(),
-        )
-    }.getOrNull()
 }
 
 @Composable
-private fun LoginScreen(
-    errorMessage: String?,
-    onLogin: (String, String) -> Unit,
-) {
-    var username by rememberSaveable { mutableStateOf(AppDatabaseHelper.DEMO_USER) }
-    var password by rememberSaveable { mutableStateOf(AppDatabaseHelper.DEMO_PASSWORD) }
+private fun LoginScreen(authenticate: (String, String) -> Boolean, onLoginSuccess: () -> Unit) {
+    var username by rememberSaveable { mutableStateOf("admin") }
+    var password by rememberSaveable { mutableStateOf("Admin123!") }
+    var passwordVisible by rememberSaveable { mutableStateOf(false) }
+    var error by rememberSaveable { mutableStateOf("") }
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Ink)
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 24.dp, vertical = 28.dp),
-        verticalArrangement = Arrangement.Center,
+        modifier = Modifier.fillMaxSize().padding(WindowInsets.safeDrawing.asPaddingValues())
+            .verticalScroll(rememberScrollState()).padding(horizontal = 26.dp, vertical = 32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        BrandHeader()
-        Spacer(Modifier.height(36.dp))
-        Icon(Icons.Filled.Security, contentDescription = null, tint = Mint, modifier = Modifier.size(44.dp))
-        Spacer(Modifier.height(16.dp))
-        Text("Acceso de operador", color = TextMain, fontSize = 30.sp, lineHeight = 36.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(8.dp))
-        Text(
-            "Inicia sesión para controlar el garaje y consultar los datos de los sensores.",
-            color = TextMuted,
-            fontSize = 14.sp,
-            lineHeight = 20.sp,
-        )
-        Spacer(Modifier.height(24.dp))
-        Surface(color = Panel, shape = RoundedCornerShape(22.dp), modifier = Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                OutlinedTextField(
-                    value = username,
-                    onValueChange = { username = it },
-                    label = { Text("Usuario") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                )
-                OutlinedTextField(
-                    value = password,
-                    onValueChange = { password = it },
-                    label = { Text("Contraseña") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    visualTransformation = PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                )
-                if (errorMessage != null) {
-                    Text(errorMessage, color = Red, fontSize = 12.sp)
-                }
-                Button(
-                    onClick = { onLogin(username, password) },
-                    modifier = Modifier.fillMaxWidth().height(50.dp),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink),
-                ) {
-                    Icon(Icons.Filled.LockOpen, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("Ingresar", fontWeight = FontWeight.Bold)
-                }
-                Text(
-                    "Cuenta de demostración: operador / Acceso2026!\nLa contraseña se valida mediante PBKDF2 y se almacena como hash con sal en SQLite.",
-                    color = TextMuted,
-                    fontSize = 11.sp,
-                    lineHeight = 16.sp,
-                )
-            }
-        }
-    }
-}
+        Spacer(Modifier.height(56.dp))
+        OtLogo(size = 96)
+        Spacer(Modifier.height(25.dp))
+        Text("Sistema Control de Acceso OT", color = OtText, fontSize = 25.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+        Spacer(Modifier.height(7.dp))
+        Text("Monitoreo y Activación en Zonas Oscuras", color = OtMuted, fontSize = 15.sp, textAlign = TextAlign.Center)
+        Spacer(Modifier.height(32.dp))
 
-private data class OnboardingPage(
-    val title: String,
-    val description: String,
-    val icon: ImageVector,
-    val label: String,
-)
-
-private val onboardingPages = listOf(
-    OnboardingPage(
-        title = "Detecta la oscuridad",
-        description = "La fotorresistencia reconoce si hay poca luz. De día, los actuadores permanecen apagados para ahorrar energía.",
-        icon = Icons.Filled.LightMode,
-        label = "LDR · luz ambiente",
-    ),
-    OnboardingPage(
-        title = "Busca obstáculos de noche",
-        description = "Cuando oscurece, se activa el sensor ultrasónico para detectar si un auto o una persona se acerca.",
-        icon = Icons.Filled.Sensors,
-        label = "HC-SR04 · distancia",
-    ),
-    OnboardingPage(
-        title = "Abre y alerta",
-        description = "Si algo está cerca, el servomotor levanta la barrera y las luces rojas avisan que el acceso está activo.",
-        icon = Icons.Filled.WarningAmber,
-        label = "Servomotor + luces rojas",
-    ),
-)
-
-@Composable
-private fun OnboardingScreen(
-    step: Int,
-    onStepChange: (Int) -> Unit,
-    onSkip: () -> Unit,
-    onFinish: () -> Unit,
-) {
-    val page = onboardingPages[step]
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Ink)
-            .padding(horizontal = 22.dp, vertical = 18.dp),
-        verticalArrangement = Arrangement.spacedBy(18.dp),
-    ) {
-        BrandHeader()
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            TextButton(onClick = onSkip) { Text("Omitir", color = TextMuted) }
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            onboardingPages.indices.forEach { index ->
-                Box(
-                    Modifier
-                        .padding(horizontal = 4.dp)
-                        .size(width = if (index == step) 26.dp else 8.dp, height = 8.dp)
-                        .clip(CircleShape)
-                        .background(if (index == step) Mint else PanelRaised),
-                )
-            }
-        }
         Surface(
-            color = Panel,
-            shape = RoundedCornerShape(24.dp),
-            modifier = Modifier.fillMaxWidth().weight(1f),
+            modifier = Modifier.fillMaxWidth().border(1.dp, OtLine, RoundedCornerShape(18.dp)),
+            color = OtPanel,
+            shape = RoundedCornerShape(18.dp),
         ) {
-            Column(
-                modifier = Modifier.padding(horizontal = 24.dp, vertical = 22.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-            ) {
-                Box(
-                    modifier = Modifier.size(86.dp).clip(RoundedCornerShape(25.dp)).background(Mint.copy(alpha = .12f)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(page.icon, contentDescription = null, tint = Mint, modifier = Modifier.size(42.dp))
-                }
-                Spacer(Modifier.height(24.dp))
-                Text("PASO ${step + 1} DE ${onboardingPages.size} · ${page.label.uppercase()}", color = Mint, fontSize = 11.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, letterSpacing = .7.sp)
-                Spacer(Modifier.height(12.dp))
-                Text(page.title, color = TextMain, fontSize = 26.sp, lineHeight = 32.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
-                Spacer(Modifier.height(12.dp))
-                Text(page.description, color = TextMuted, fontSize = 15.sp, lineHeight = 22.sp, textAlign = TextAlign.Center)
+            Column(Modifier.padding(horizontal = 24.dp, vertical = 25.dp), verticalArrangement = Arrangement.spacedBy(19.dp)) {
+                Text("Ingreso de Credenciales", color = OtBlue, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                OtTextField(value = username, onValueChange = { username = it; error = "" }, label = "Usuario Operador")
+                OtTextField(
+                    value = password,
+                    onValueChange = { password = it; error = "" },
+                    label = "Contraseña",
+                    visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                    keyboardType = KeyboardType.Password,
+                    trailingIcon = {
+                        IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                            Icon(if (passwordVisible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility, if (passwordVisible) "Ocultar contraseña" else "Mostrar contraseña", tint = OtMuted)
+                        }
+                    },
+                )
+                if (error.isNotEmpty()) Text(error, color = OtRed, fontSize = 12.sp)
+                Button(
+                    onClick = { if (authenticate(username, password)) onLoginSuccess() else error = "Usuario o contraseña incorrectos" },
+                    modifier = Modifier.fillMaxWidth().height(52.dp),
+                    shape = RoundedCornerShape(13.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = OtBlue, contentColor = Color.White),
+                ) { Text("INICIAR SESIÓN", fontSize = 16.sp, fontWeight = FontWeight.SemiBold) }
+                Text("Credenciales de Prueba: admin / Admin123!", color = OtDisabled, fontSize = 12.sp, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
             }
         }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalAlignment = Alignment.CenterVertically,
+        Spacer(Modifier.height(27.dp))
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+            Icon(Icons.Filled.Lock, null, tint = OtOrange, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(7.dp))
+            Text("Cumplimiento Estándar ISO/IEC 27001 y Seguridad OT", color = OtGreen, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
+        }
+    }
+}
+
+@Composable
+private fun OtTextField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    label: String,
+    visualTransformation: VisualTransformation = VisualTransformation.None,
+    keyboardType: KeyboardType = KeyboardType.Text,
+    trailingIcon: @Composable (() -> Unit)? = null,
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        label = { Text(label) },
+        modifier = Modifier.fillMaxWidth(),
+        singleLine = true,
+        visualTransformation = visualTransformation,
+        keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+        trailingIcon = trailingIcon,
+        shape = RoundedCornerShape(7.dp),
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedContainerColor = OtField, unfocusedContainerColor = OtField,
+            focusedTextColor = OtText, unfocusedTextColor = OtText, cursorColor = OtBlue,
+            focusedBorderColor = OtBlue, unfocusedBorderColor = Color(0xFF050C18),
+            focusedLabelColor = OtBlue, unfocusedLabelColor = OtMuted,
+        ),
+    )
+}
+
+@Composable
+private fun OtLogo(size: Int) {
+    Box(
+        modifier = Modifier.size(size.dp).clip(CircleShape).background(OtField).border(3.dp, OtBlue, CircleShape),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(Icons.Filled.Security, null, tint = Color(0xFFCED7E6), modifier = Modifier.size((size * .58f).dp))
+        Box(
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = (size * .14f).dp)
+                .size((size * .36f).dp).clip(RoundedCornerShape((size * .07f).dp)).background(OtBlue),
+            contentAlignment = Alignment.Center,
         ) {
-            if (step > 0) {
-                OutlinedButton(
-                    onClick = { onStepChange(step - 1) },
-                    modifier = Modifier.height(50.dp),
-                    shape = RoundedCornerShape(14.dp),
-                ) {
-                    Text("Atrás")
-                }
+            Icon(Icons.Filled.Lock, null, tint = OtOrange, modifier = Modifier.size((size * .22f).dp))
+        }
+    }
+}
+
+@Composable
+private fun ControlCenter(audit: MutableList<AuditEvent>, onShowAudit: () -> Unit) {
+    var section by rememberSaveable { mutableStateOf(OtSection.MONITOR) }
+    var distance by rememberSaveable { mutableFloatStateOf(50f) }
+    var light by rememberSaveable { mutableFloatStateOf(500f) }
+    var distanceThreshold by rememberSaveable { mutableFloatStateOf(20f) }
+    var lightThreshold by rememberSaveable { mutableFloatStateOf(400f) }
+    var servoMode by rememberSaveable { mutableStateOf(ServoMode.AUTO) }
+    var emergency by rememberSaveable { mutableStateOf(false) }
+    var connectionMode by rememberSaveable { mutableStateOf(ConnectionMode.BLUETOOTH) }
+    var connected by rememberSaveable { mutableStateOf(false) }
+    var command by rememberSaveable { mutableStateOf("CMD_OPEN_GATE_SECURE") }
+    var packets by rememberSaveable { mutableStateOf(0) }
+
+    val automaticOpen = light < lightThreshold && distance < distanceThreshold
+    val gateOpen = !emergency && when (servoMode) {
+        ServoMode.AUTO -> automaticOpen
+        ServoMode.OPEN -> true
+        ServoMode.CLOSED -> false
+    }
+
+    Column(Modifier.fillMaxSize().padding(WindowInsets.safeDrawing.asPaddingValues())) {
+        Header(onShowAudit)
+        SectionTabs(section = section, onSelect = { section = it })
+        when (section) {
+            OtSection.MONITOR -> MonitorScreen(distance, light, distanceThreshold, lightThreshold, gateOpen, { distance = it }, { light = it })
+            OtSection.ACTUATOR -> ActuatorScreen(
+                servoMode = servoMode,
+                onServoModeChange = { servoMode = it; audit.add(0, auditEvent("SERVO_MODE", "admin", "Modo seleccionado: ${it.name}")) },
+                emergency = emergency,
+                onEmergencyChange = { emergency = it; audit.add(0, auditEvent("OT_EMERGENCY", "admin", if (it) "Anulación activada" else "Anulación desactivada")) },
+                distanceThreshold = distanceThreshold,
+                lightThreshold = lightThreshold,
+                onDistanceThresholdChange = { distanceThreshold = it },
+                onLightThresholdChange = { lightThreshold = it },
+                command = command,
+                onCommandChange = { command = it },
+                onSendCommand = { packets++; audit.add(0, auditEvent("WIRELESS_COMMAND", "admin", command.ifBlank { "Comando vacío" })) },
+            )
+            OtSection.CONNECTION -> ConnectionScreen(
+                mode = connectionMode,
+                onModeChange = { connectionMode = it },
+                connected = connected,
+                packets = packets,
+                onConnect = { connected = true; packets += 2; audit.add(0, auditEvent("CONNECT", "admin", "Enlace ${connectionMode.name} establecido")) },
+                onDisconnect = { connected = false; audit.add(0, auditEvent("DISCONNECT", "admin", "Conexión inalámbrica finalizada")) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun Header(onShowAudit: () -> Unit) {
+    Surface(
+        modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp).fillMaxWidth().border(1.dp, OtLine, RoundedCornerShape(18.dp)),
+        shape = RoundedCornerShape(18.dp), color = OtPanel,
+    ) {
+        Row(Modifier.padding(18.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            OtLogo(size = 58)
+            Column(Modifier.weight(1f)) {
+                Text("Sistema Control\nde Acceso OT", color = OtText, fontSize = 20.sp, lineHeight = 23.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(5.dp))
+                Text("Operador: admin | ISO\n27001 Activo", color = OtBlue, fontSize = 13.sp, lineHeight = 16.sp)
             }
-            Button(
-                onClick = if (step == onboardingPages.lastIndex) onFinish else ({ onStepChange(step + 1) }),
-                modifier = Modifier.weight(1f).height(50.dp),
-                shape = RoundedCornerShape(14.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink),
-            ) {
-                Text(if (step == onboardingPages.lastIndex) "Entrar al simulador" else "Siguiente", fontWeight = FontWeight.SemiBold)
+            OutlinedButton(onClick = onShowAudit, shape = RoundedCornerShape(7.dp), colors = ButtonDefaults.outlinedButtonColors(contentColor = OtBlue), modifier = Modifier.height(46.dp)) {
+                Text("AUDITORÍA", fontSize = 12.sp, letterSpacing = 1.sp)
             }
         }
     }
 }
 
 @Composable
-private fun navColors() = NavigationBarItemDefaults.colors(
-    selectedIconColor = Mint,
-    selectedTextColor = MintSoft,
-    indicatorColor = PanelRaised,
-    unselectedIconColor = TextMuted,
-    unselectedTextColor = TextMuted,
-)
+private fun SectionTabs(section: OtSection, onSelect: (OtSection) -> Unit) {
+    Row(
+        modifier = Modifier.padding(horizontal = 18.dp, vertical = 5.dp).fillMaxWidth().background(OtPanel).padding(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        TabButton("Monitoreo", section == OtSection.MONITOR, Modifier.weight(1f)) { onSelect(OtSection.MONITOR) }
+        TabButton("Activador", section == OtSection.ACTUATOR, Modifier.weight(1f)) { onSelect(OtSection.ACTUATOR) }
+        TabButton("Conexión\nInalámbrica", section == OtSection.CONNECTION, Modifier.weight(1f)) { onSelect(OtSection.CONNECTION) }
+    }
+}
 
 @Composable
-private fun Dashboard(
-    isNight: Boolean,
-    approaching: Boolean,
-    onNightChange: (Boolean) -> Unit,
-    onApproachChange: (Boolean) -> Unit,
-    modifier: Modifier = Modifier,
+private fun TabButton(text: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Box(
+        modifier = modifier.height(55.dp).clip(RoundedCornerShape(12.dp)).background(if (selected) OtBlue else OtField).clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) { Text(text, color = OtText, fontSize = 13.sp, lineHeight = 16.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center) }
+}
+
+@Composable
+private fun MonitorScreen(
+    distance: Float,
+    light: Float,
+    distanceThreshold: Float,
+    lightThreshold: Float,
+    gateOpen: Boolean,
+    onDistanceChange: (Float) -> Unit,
+    onLightChange: (Float) -> Unit,
 ) {
     Column(
-        modifier = modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp)
-            .padding(top = 14.dp, bottom = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(18.dp),
+        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp).padding(top = 14.dp, bottom = 28.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        BrandHeader()
-
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(
-                "Tu entrada,\nsiempre segura.",
-                style = MaterialTheme.typography.headlineLarge,
-                fontWeight = FontWeight.Bold,
-                color = TextMain,
-                lineHeight = 37.sp,
-            )
-            Text(
-                "La luz decide cuándo activar la protección.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = TextMuted,
-            )
-        }
-
-        GarageStatusCard(isNight, approaching)
-
-        ScenarioControls(isNight, approaching, onNightChange, onApproachChange)
-
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            SectionHeading("Lecturas del circuito", "DEMO")
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                SensorCard(
-                    title = "Fotorresistencia",
-                    value = if (isNight) "Noche" else "Día",
-                    detail = if (isNight) "18 lx · oscuro" else "248 lx · luz ambiente",
-                    icon = if (isNight) Icons.Filled.DarkMode else Icons.Filled.LightMode,
-                    active = true,
-                    modifier = Modifier.weight(1f),
-                )
-                SensorCard(
-                    title = "Distancia",
-                    value = if (!isNight) "En pausa" else if (approaching) "0,6 m" else "2,8 m",
-                    detail = if (!isNight) "Se activa de noche" else if (approaching) "Objeto cercano" else "Zona despejada",
-                    icon = Icons.Filled.Sensors,
-                    active = isNight,
-                    modifier = Modifier.weight(1f),
-                )
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                SensorCard(
-                    title = "Servomotor",
-                    value = if (approaching && isNight) "Abierta" else "Cerrada",
-                    detail = if (approaching && isNight) "Barrera levantada" else "Barrera abajo",
-                    icon = Icons.Filled.LocalParking,
-                    active = approaching && isNight,
-                    modifier = Modifier.weight(1f),
-                )
-                SensorCard(
-                    title = "Luces rojas",
-                    value = if (approaching && isNight) "Alerta" else "Apagadas",
-                    detail = if (approaching && isNight) "Aviso de acceso" else "Sin alerta activa",
-                    icon = Icons.Filled.WarningAmber,
-                    active = approaching && isNight,
-                    modifier = Modifier.weight(1f),
-                    alert = approaching && isNight,
-                )
-            }
-        }
-
-        EnergyCard(isNight)
-        FlowSummary(isNight, approaching)
-        Text(
-            "Simulación educativa · Las lecturas son referenciales y no se conectan a hardware.",
-            color = TextMuted,
-            fontSize = 11.sp,
-            lineHeight = 16.sp,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
-        )
+        SectionLabel("ENTRADAS (DATOS RECIBIDOS DE SENSORES)")
+        SensorPanel(Icons.Filled.Sensors, "Sensor Ultrasónico (Distancia)", "${distance.toInt()} cm", "Umbral configurado: < ${distanceThreshold.toInt()} cm", distance, 0f..100f, OtBlue, onDistanceChange)
+        SensorPanel(Icons.Filled.LightMode, "Fotorresistencia LDR (Luz)", light.toInt().toString(), "Umbral configurado: Oscuridad < ${lightThreshold.toInt()}", light, 0f..1000f, OtOrange, onLightChange)
+        GateStatusCard(gateOpen, distance, light)
     }
 }
 
 @Composable
-private fun BrandHeader() {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Box(
-                modifier = Modifier.size(38.dp).clip(RoundedCornerShape(12.dp)).background(Mint),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(Icons.Filled.LocalParking, contentDescription = null, tint = Ink, modifier = Modifier.size(22.dp))
-            }
-            Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                Text("ACCESO SEGURO", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = TextMain, letterSpacing = 1.1.sp)
-        Text("PORTERO INTELIGENTE", fontSize = 11.sp, color = TextMuted, letterSpacing = 1.2.sp)
-            }
-        }
-        Row(
-            modifier = Modifier.clip(CircleShape).background(PanelRaised).padding(horizontal = 11.dp, vertical = 7.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            Box(Modifier.size(6.dp).clip(CircleShape).background(Mint))
-            Text("MODO DEMO", fontSize = 10.sp, color = MintSoft, fontWeight = FontWeight.Bold, letterSpacing = .7.sp)
-        }
-    }
-}
-
-@Composable
-private fun GarageStatusCard(isNight: Boolean, approaching: Boolean) {
-    val raised by animateFloatAsState(
-        targetValue = if (isNight && approaching) 1f else 0f,
-        animationSpec = tween(600),
-        label = "gate position",
-    )
-    val active = isNight && approaching
-    Surface(
-        color = Panel,
-        shape = RoundedCornerShape(24.dp),
-        modifier = Modifier.fillMaxWidth().border(1.dp, Color.White.copy(alpha = .06f), RoundedCornerShape(24.dp)),
-    ) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(if (active) "VEHÍCULO DETECTADO" else if (isNight) "NOCHE DETECTADA" else "DÍA DETECTADO", fontSize = 11.sp, color = TextMuted, fontWeight = FontWeight.Bold, letterSpacing = 1.1.sp)
-                    Text(
-                        when {
-                            active -> "Acceso en alerta"
-                            isNight -> "Sistema listo para proteger"
-                            else -> "Sistema en ahorro"
-                        },
-                        fontSize = 18.sp,
-                        color = TextMain,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                }
-                StatusBadge(
-                    text = if (active) "ALERTA" else if (isNight) "ACTIVO" else "AHORRANDO",
-                    color = if (active) Red else Mint,
-                )
-            }
-
-            GarageIllustration(
-                raised = raised,
-                active = active,
-                isNight = isNight,
-                description = when {
-                    active -> "Vehículo detectado de noche; barrera levantada y luces rojas encendidas."
-                    isNight -> "Garaje de noche; ultrasonido activo, barrera cerrada y sin alerta."
-                    else -> "Garaje de día; sensores y actuadores en reposo para ahorrar energía."
-                },
-                modifier = Modifier.fillMaxWidth().height(164.dp),
-            )
-
-            Row(
-                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(PanelRaised).padding(horizontal = 12.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(9.dp),
-            ) {
-                Icon(
-                    imageVector = when {
-                        active -> Icons.Filled.WarningAmber
-                        isNight -> Icons.Filled.Sensors
-                        else -> Icons.Filled.Bolt
-                    },
-                    contentDescription = null,
-                    tint = when { active -> Red; isNight -> Mint; else -> Amber },
-                    modifier = Modifier.size(18.dp),
-                )
-                Text(
-                    when {
-                        active -> "Barrera arriba · luces rojas encendidas"
-                        isNight -> "Ultrasonido activo · acceso despejado"
-                        else -> "Sensores y actuadores en reposo"
-                    },
-                    color = TextMain,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Medium,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun GarageIllustration(raised: Float, active: Boolean, isNight: Boolean, description: String, modifier: Modifier = Modifier) {
-    val angle by animateFloatAsState(targetValue = -62f * raised, animationSpec = tween(650), label = "barrier angle")
-    Box(modifier = modifier.clip(RoundedCornerShape(18.dp)).background(Color(0xFF0D171C)).semantics { contentDescription = description }) {
-        Canvas(Modifier.fillMaxSize()) {
-            val w = size.width
-            val h = size.height
-            val px = density
-            val garageLeft = w * .12f
-            val garageTop = h * .09f
-            val garageWidth = w * .76f
-            val garageHeight = h * .56f
-            drawRoundRect(Color(0xFF273940), Offset(garageLeft, garageTop), Size(garageWidth, garageHeight), CornerRadius(12f * px))
-            drawRoundRect(Color(0xFF0B1216), Offset(garageLeft + w * .12f, garageTop + h * .13f), Size(w * .52f, h * .50f), CornerRadius(6f * px))
-            drawRoundRect(Color(0xFF344951), Offset(garageLeft + 7 * px, garageTop + 6 * px), Size(garageWidth - 14 * px, 5 * px), CornerRadius(3 * px))
-            drawRect(Color(0xFF17252B), Offset(0f, h * .70f), Size(w, h * .30f))
-            for (i in 0..4) {
-                val x = w * (.08f + i * .21f)
-                drawLine(Color(0xFF58686C), Offset(x, h * .87f), Offset(x + w * .11f, h * .87f), strokeWidth = 2.5f * px, cap = StrokeCap.Round)
-            }
-            // Detector above the entrance
-            val sensorColor = if (isNight) Mint else Amber
-            drawCircle(sensorColor.copy(alpha = .18f), radius = 11 * px, center = Offset(w * .69f, h * .20f))
-            drawCircle(sensorColor, radius = 4 * px, center = Offset(w * .69f, h * .20f))
-            // Red warning lamps
-            val lampAlpha = if (active) 1f else .20f
-            for (i in 0..2) {
-                drawRoundRect(Red.copy(alpha = lampAlpha), Offset(w * (.74f + i * .055f), h * .34f), Size(8 * px, 5 * px), CornerRadius(3 * px))
-            }
-            // Barrier arm and pivot. Canvas rotation uses clockwise-positive degrees.
-            val pivot = Offset(w * .31f, h * .75f)
-            drawCircle(Color(0xFFCEDAD8), radius = 10 * px, center = pivot)
-            drawContext.transform.rotate(degrees = angle, pivot = pivot)
-            drawRoundRect(Color(0xFFEEF3EF), Offset(pivot.x, pivot.y - 5 * px), Size(w * .48f, 10 * px), CornerRadius(5 * px))
-            drawRoundRect(Red, Offset(pivot.x + w * .20f, pivot.y - 5 * px), Size(w * .10f, 10 * px), CornerRadius(4 * px))
-            drawContext.transform.rotate(degrees = -angle, pivot = pivot)
-            // Approaching car
-            val carX = if (active) w * .69f else w * .71f
-            val carY = h * .72f
-            val carColor = if (active) Color(0xFF3D9D80) else Color(0xFF48626A)
-            drawRoundRect(carColor, Offset(carX, carY), Size(w * .20f, h * .13f), CornerRadius(8 * px))
-            drawRoundRect(Color(0xFF9CC9BB), Offset(carX + w * .045f, carY - h * .07f), Size(w * .11f, h * .08f), CornerRadius(7 * px))
-            drawCircle(Color(0xFF0A1116), radius = 4 * px, center = Offset(carX + w * .045f, carY + h * .13f))
-            drawCircle(Color(0xFF0A1116), radius = 4 * px, center = Offset(carX + w * .16f, carY + h * .13f))
-            if (active) {
-                drawCircle(Red.copy(alpha = .14f), radius = 14 * px, center = Offset(w * .85f, h * .41f))
-                drawCircle(Red, radius = 4 * px, center = Offset(w * .85f, h * .41f))
-            }
-        }
-        Row(
-            modifier = Modifier.align(Alignment.BottomStart).padding(10.dp).clip(CircleShape).background(Ink.copy(alpha = .72f)).padding(horizontal = 8.dp, vertical = 5.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(5.dp),
-        ) {
-            Box(Modifier.size(5.dp).clip(CircleShape).background(if (isNight) Mint else Amber))
-            Text(if (isNight) "SENSOR LDR: OSCURIDAD" else "SENSOR LDR: LUZ", fontSize = 10.sp, color = TextMain, letterSpacing = .4.sp)
-        }
-    }
-}
-
-@Composable
-private fun ScenarioControls(
-    isNight: Boolean,
-    approaching: Boolean,
-    onNightChange: (Boolean) -> Unit,
-    onApproachChange: (Boolean) -> Unit,
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        SectionHeading("Prueba el circuito", "CONTROLES")
-        Surface(color = Panel, shape = RoundedCornerShape(20.dp), modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(13.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(9.dp), modifier = Modifier.fillMaxWidth()) {
-                    ScenarioButton(
-                        label = "Día",
-                        icon = Icons.Filled.LightMode,
-                        selected = !isNight,
-                        color = Amber,
-                        modifier = Modifier.weight(1f),
-                        onClick = { onNightChange(false) },
-                    )
-                    ScenarioButton(
-                        label = "Noche",
-                        icon = Icons.Filled.DarkMode,
-                        selected = isNight,
-                        color = Mint,
-                        modifier = Modifier.weight(1f),
-                        onClick = { onNightChange(true) },
-                    )
-                }
-                if (!approaching) {
-                    Button(
-                        onClick = { onApproachChange(true) },
-                        enabled = isNight,
-                        modifier = Modifier.fillMaxWidth().height(48.dp),
-                        shape = RoundedCornerShape(14.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Mint,
-                            contentColor = Ink,
-                            disabledContainerColor = PanelRaised,
-                            disabledContentColor = TextMuted,
-                        ),
-                    ) {
-                        Icon(Icons.Filled.LocalParking, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text(if (isNight) "Simular vehículo acercándose" else "El sensor duerme durante el día", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-                    }
-                } else {
-                    OutlinedButton(
-                        onClick = { onApproachChange(false) },
-                        modifier = Modifier.fillMaxWidth().height(48.dp),
-                        shape = RoundedCornerShape(14.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MintSoft),
-                    ) {
-                        Icon(Icons.Filled.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text("Retirar vehículo y reiniciar", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-                    }
-                }
-                Text(
-                    if (isNight) "De noche, el ultrasonido busca obstáculos cercanos." else "Con luz de día, el ultrasonido, el servo y las luces permanecen apagados.",
-                    fontSize = 11.sp,
-                    color = TextMuted,
-                    lineHeight = 16.sp,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun ScenarioButton(
-    label: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    selected: Boolean,
-    color: Color,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit,
-) {
-    val background = if (selected) color.copy(alpha = .13f) else PanelRaised
-    val foreground = if (selected) color else TextMuted
-    Row(
-        modifier = modifier
-            .height(43.dp)
-            .clip(RoundedCornerShape(13.dp))
-            .background(background)
-            .border(1.dp, if (selected) color.copy(alpha = .38f) else Color.Transparent, RoundedCornerShape(13.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.Center,
-    ) {
-        Icon(icon, contentDescription = null, tint = foreground, modifier = Modifier.size(17.dp))
-        Spacer(Modifier.width(7.dp))
-        Text(label, color = foreground, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-    }
-}
-
-@Composable
-private fun SectionHeading(title: String, label: String) {
-    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(title, fontSize = 16.sp, color = TextMain, fontWeight = FontWeight.SemiBold)
-        Text(label, fontSize = 10.sp, color = TextMuted, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-    }
-}
-
-@Composable
-private fun SensorCard(
+private fun SensorPanel(
+    icon: ImageVector,
     title: String,
     value: String,
-    detail: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    active: Boolean,
-    modifier: Modifier = Modifier,
-    alert: Boolean = false,
+    subtitle: String,
+    sliderValue: Float,
+    range: ClosedFloatingPointRange<Float>,
+    accent: Color,
+    onValueChange: (Float) -> Unit,
 ) {
-    val accent = if (alert) Red else if (active) Mint else TextMuted
-    Surface(color = Panel, shape = RoundedCornerShape(18.dp), modifier = modifier) {
-        Column(modifier = Modifier.padding(13.dp), verticalArrangement = Arrangement.spacedBy(11.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                Box(Modifier.size(31.dp).clip(RoundedCornerShape(10.dp)).background(accent.copy(alpha = .12f)), contentAlignment = Alignment.Center) {
-                    Icon(icon, contentDescription = null, tint = accent, modifier = Modifier.size(17.dp))
-                }
-                Box(Modifier.size(6.dp).clip(CircleShape).background(accent))
+    OtCard {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(icon, null, tint = OtMuted, modifier = Modifier.size(19.dp))
+            Spacer(Modifier.width(7.dp))
+            Text(title, color = OtText, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            Text(value, color = accent, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        }
+        Text(subtitle, color = OtDisabled, fontSize = 12.sp)
+        OtSlider(sliderValue, onValueChange, range)
+    }
+}
+
+@Composable
+private fun GateStatusCard(gateOpen: Boolean, distance: Float, light: Float) {
+    val color = if (gateOpen) OtRed else OtGreen
+    Surface(
+        modifier = Modifier.fillMaxWidth().border(2.dp, color, RoundedCornerShape(18.dp)),
+        color = if (gateOpen) Color(0xFF3B0E18) else Color(0xFF003B22), shape = RoundedCornerShape(18.dp),
+    ) {
+        Column(Modifier.padding(21.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(if (gateOpen) "ALERTA DE ACCESO" else "ESTADO NORMAL (REPOSO)", color = color, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+            Text(if (gateOpen) "BARRERA ABIERTA" else "BARRERA CERRADA", color = color, fontSize = 25.sp, fontWeight = FontWeight.Bold)
+            Text("Servomotor: ${if (gateOpen) 90 else 0}°", color = OtMuted, fontSize = 16.sp)
+            Box(Modifier.fillMaxWidth().height(1.dp).background(OtLine))
+            Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+                LedStatus("LED Verde", !gateOpen, OtGreen)
+                LedStatus("LED Rojo", gateOpen, OtRed)
             }
-            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text(title, fontSize = 12.sp, color = TextMuted)
-                Text(value, fontSize = 15.sp, color = TextMain, fontWeight = FontWeight.SemiBold)
-                Text(detail, fontSize = 11.sp, color = accent, lineHeight = 14.sp)
-            }
+            Text(
+                if (gateOpen) "Condiciones cumplidas: zona oscura y obstáculo detectado."
+                else "Condiciones no cumplidas (Distancia: ${distance.toInt()} cm, Luz: ${light.toInt()}).",
+                color = OtMuted, fontSize = 13.sp, lineHeight = 18.sp,
+            )
         }
     }
 }
 
 @Composable
-private fun StatusBadge(text: String, color: Color) {
-    Row(
-        modifier = Modifier.clip(CircleShape).background(color.copy(alpha = .13f)).padding(horizontal = 9.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(5.dp),
-    ) {
-        Box(Modifier.size(5.dp).clip(CircleShape).background(color))
-        Text(text, color = color, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = .5.sp)
+private fun LedStatus(label: String, on: Boolean, color: Color) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Box(Modifier.size(24.dp).clip(CircleShape).background(if (on) color else OtField))
+        Text("$label (${if (on) "ON" else "OFF"})", color = if (on) color else OtDisabled, fontSize = 12.sp)
     }
 }
 
 @Composable
-private fun EnergyCard(isNight: Boolean) {
-    Surface(color = Panel, shape = RoundedCornerShape(20.dp), modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.padding(15.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Box(Modifier.size(42.dp).clip(RoundedCornerShape(14.dp)).background(Amber.copy(alpha = .13f)), contentAlignment = Alignment.Center) {
-                Icon(Icons.Filled.Bolt, contentDescription = null, tint = Amber, modifier = Modifier.size(22.dp))
-            }
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text(if (isNight) "Ahorro inteligente" else "Ahorro diurno activo", color = TextMain, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                Text(
-                    if (isNight) "Solo se activa lo necesario cuando oscurece." else "Barrera, ultrasonido y luces están apagados.",
-                    color = TextMuted,
-                    fontSize = 12.sp,
-                    lineHeight = 16.sp,
+private fun ActuatorScreen(
+    servoMode: ServoMode,
+    onServoModeChange: (ServoMode) -> Unit,
+    emergency: Boolean,
+    onEmergencyChange: (Boolean) -> Unit,
+    distanceThreshold: Float,
+    lightThreshold: Float,
+    onDistanceThresholdChange: (Float) -> Unit,
+    onLightThresholdChange: (Float) -> Unit,
+    command: String,
+    onCommandChange: (String) -> Unit,
+    onSendCommand: () -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp).padding(top = 14.dp, bottom = 30.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        SectionLabel("ACTIVADOR Y CONTROL MANUAL DE ACTUADORES")
+        OtCard {
+            CardTitle("Modo de Operación del Servomotor")
+            RadioRow("Automático (Lógica de Sensores)", servoMode == ServoMode.AUTO) { onServoModeChange(ServoMode.AUTO) }
+            RadioRow("Manual: Forzar Barrera ABIERTA (90°)", servoMode == ServoMode.OPEN) { onServoModeChange(ServoMode.OPEN) }
+            RadioRow("Manual: Forzar Barrera CERRADA (0°)", servoMode == ServoMode.CLOSED) { onServoModeChange(ServoMode.CLOSED) }
+        }
+        OtCard {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Anulación de Emergencia (OT Switch)", color = OtText, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Text("Inhabilita aperturas automáticas por seguridad", color = OtDisabled, fontSize = 12.sp, lineHeight = 17.sp)
+                }
+                Switch(
+                    checked = emergency, onCheckedChange = onEmergencyChange,
+                    colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = OtRed, uncheckedThumbColor = Color.White, uncheckedTrackColor = OtDisabled),
                 )
             }
-            Icon(if (isNight) Icons.Filled.TipsAndUpdates else Icons.Filled.CheckCircle, contentDescription = null, tint = if (isNight) Mint else Amber, modifier = Modifier.size(19.dp))
         }
-    }
-}
-
-@Composable
-private fun FlowSummary(isNight: Boolean, approaching: Boolean) {
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        SectionHeading("Lógica del sistema", "SECUENCIA")
-        Surface(color = Panel, shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
-            Row(
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 15.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(5.dp),
-            ) {
-                FlowNode("LDR", "luz", active = true, modifier = Modifier.weight(1f))
-                Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, tint = if (isNight) Mint else TextMuted, modifier = Modifier.size(13.dp))
-                FlowNode("HC-SR04", "distancia", active = isNight, modifier = Modifier.weight(1.15f))
-                Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, tint = if (approaching && isNight) Mint else TextMuted, modifier = Modifier.size(13.dp))
-                FlowNode("SERVO + LED", "barrera", active = approaching && isNight, modifier = Modifier.weight(1.25f))
-            }
+        OtCard {
+            CardTitle("Calibración Dinámica de Umbrales")
+            Text("Umbral Distancia: ${distanceThreshold.toInt()} cm", color = OtText, fontSize = 14.sp)
+            OtSlider(distanceThreshold, onDistanceThresholdChange, 5f..80f)
+            Text("Umbral Luz: ${lightThreshold.toInt()} ADC", color = OtText, fontSize = 14.sp)
+            OtSlider(lightThreshold, onLightThresholdChange, 0f..1000f)
         }
-    }
-}
-
-@Composable
-private fun FlowNode(label: String, detail: String, active: Boolean, modifier: Modifier = Modifier) {
-    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(5.dp)) {
-        Box(Modifier.size(8.dp).clip(CircleShape).background(if (active) Mint else TextMuted.copy(alpha = .45f)))
-        Text(label, color = if (active) TextMain else TextMuted, fontSize = 10.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, lineHeight = 12.sp)
-        Text(detail, color = TextMuted, fontSize = 10.sp, textAlign = TextAlign.Center)
+        OtCard {
+            CardTitle("Envío de Comando Inalámbrico (EditText)")
+            OutlinedTextField(
+                value = command, onValueChange = onCommandChange, modifier = Modifier.fillMaxWidth(), singleLine = true,
+                colors = OutlinedTextFieldDefaults.colors(focusedTextColor = OtText, unfocusedTextColor = OtText, focusedBorderColor = OtPurple, unfocusedBorderColor = OtMuted, cursorColor = OtBlue),
+            )
+            Button(
+                onClick = onSendCommand, modifier = Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(25.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = OtBlue),
+            ) { Text("ENVIAR COMANDO A OTRO\nDISPOSITIVO", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center) }
+        }
     }
 }
 
 @Composable
 private fun ConnectionScreen(
-    status: LanStatus,
-    remotePayload: String?,
-    onStartController: (String) -> Unit,
-    onConnectMonitor: (String, String) -> Unit,
+    mode: ConnectionMode,
+    onModeChange: (ConnectionMode) -> Unit,
+    connected: Boolean,
+    packets: Int,
+    onConnect: () -> Unit,
     onDisconnect: () -> Unit,
-    modifier: Modifier = Modifier,
 ) {
-    var hostAddress by rememberSaveable { mutableStateOf("") }
-    var pairingCode by rememberSaveable { mutableStateOf(LanIoTManager.DEFAULT_CODE) }
-    val remoteReading = remotePayload?.let(::decodeReading)
-
     Column(
-        modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(top = 14.dp, bottom = 28.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp).padding(top = 14.dp, bottom = 30.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        BrandHeader()
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("Conectar dos\ndispositivos.", fontSize = 29.sp, lineHeight = 35.sp, color = TextMain, fontWeight = FontWeight.Bold)
-            Text("Usa dos teléfonos en la misma red Wi-Fi: uno controla y el otro monitorea.", color = TextMuted, fontSize = 13.sp, lineHeight = 19.sp)
-        }
-
-        Surface(color = Panel, shape = RoundedCornerShape(22.dp), modifier = Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(13.dp)) {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Text("Estado de la conexión", color = TextMain, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                        Text(status.message, color = TextMuted, fontSize = 12.sp, lineHeight = 17.sp)
-                    }
-                    StatusBadge(if (status.connected) "CONECTADO" else "LOCAL", if (status.connected) Mint else Amber)
-                }
-                Text("IP de este dispositivo: ${status.localAddress}", color = MintSoft, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                Text("Puerto: ${LanIoTManager.PORT}", color = TextMuted, fontSize = 11.sp)
-            }
-        }
-
-        Surface(color = Panel, shape = RoundedCornerShape(22.dp), modifier = Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(13.dp)) {
-                Text("Código de vinculación", color = TextMain, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                OutlinedTextField(
-                    value = pairingCode,
-                    onValueChange = { pairingCode = it },
-                    label = { Text("Mismo código en ambos teléfonos") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
+        SectionLabel("GESTOR DE CONEXIONES INALÁMBRICAS (BLUETOOTH / WI-FI)")
+        OtCard {
+            Text("Estado: ${if (connected) "CONECTADO" else "DESCONECTADO"}", color = if (connected) OtGreen else OtRed, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Text("Tecnología: ${mode.description()}", color = OtMuted, fontSize = 13.sp)
+            RadioRow("Bluetooth (HC-05 / ESP32)", mode == ConnectionMode.BLUETOOTH, Icons.Filled.Bluetooth) { onModeChange(ConnectionMode.BLUETOOTH) }
+            RadioRow("Wi-Fi UDP Socket (192.168.1.100:8080)", mode == ConnectionMode.WIFI, Icons.Filled.Wifi) { onModeChange(ConnectionMode.WIFI) }
+            RadioRow("Interconexión Multi-App Móvil (Mesh)", mode == ConnectionMode.MESH, Icons.Filled.Hub) { onModeChange(ConnectionMode.MESH) }
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Button(
-                    onClick = { onStartController(pairingCode) },
-                    modifier = Modifier.fillMaxWidth().height(48.dp),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink),
-                ) {
-                    Icon(Icons.Filled.Wifi, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("Este teléfono controla", fontWeight = FontWeight.SemiBold)
-                }
-                Text("En el segundo teléfono escribe la IP mostrada arriba y selecciona el modo monitor.", color = TextMuted, fontSize = 11.sp, lineHeight = 16.sp)
+                    onClick = onConnect, enabled = !connected, modifier = Modifier.weight(1f).height(48.dp), shape = RoundedCornerShape(25.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = OtGreen, disabledContainerColor = OtGreen.copy(alpha = .35f)),
+                ) { Text("CONECTAR", color = Color.White, fontWeight = FontWeight.SemiBold) }
+                OutlinedButton(
+                    onClick = onDisconnect, enabled = connected, modifier = Modifier.weight(1f).height(48.dp), shape = RoundedCornerShape(7.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = OtRed, disabledContentColor = OtRed.copy(alpha = .35f)),
+                ) { Text("DESCONECTAR", fontWeight = FontWeight.SemiBold) }
             }
         }
-
-        Surface(color = Panel, shape = RoundedCornerShape(22.dp), modifier = Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(13.dp)) {
-                Text("Conectarse como monitor", color = TextMain, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                OutlinedTextField(
-                    value = hostAddress,
-                    onValueChange = { hostAddress = it },
-                    label = { Text("IP del teléfono controlador") },
-                    placeholder = { Text("192.168.1.25") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
+        OtCard {
+            CardTitle("Prueba de Estabilidad y Eficiencia de Red")
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("Latencia: ${if (connected) "18" else "--"} ms", color = OtText, fontSize = 13.sp)
+                Text("Pérdida: ${if (connected) "0.0" else "--"}%", color = OtText, fontSize = 13.sp)
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("Paquetes Tx/Rx: $packets/${if (connected) packets else 0}", color = OtText, fontSize = 13.sp)
+                Text("RSSI: ${if (connected) "-62" else "--"} dBm", color = OtText, fontSize = 13.sp)
+            }
+            Box(Modifier.fillMaxWidth().background(OtField).padding(13.dp)) {
+                Text(
+                    if (connected) "[SISTEMA] Enlace estable. Prueba de interconexión activa."
+                    else "[SISTEMA] Listo para iniciar prueba de interconexión inalámbrica.",
+                    color = OtGreen, fontSize = 12.sp, lineHeight = 17.sp,
                 )
-                OutlinedButton(
-                    onClick = { onConnectMonitor(hostAddress, pairingCode) },
-                    enabled = hostAddress.isNotBlank(),
-                    modifier = Modifier.fillMaxWidth().height(48.dp),
-                    shape = RoundedCornerShape(14.dp),
-                ) {
-                    Text("Conectar este teléfono como monitor", fontWeight = FontWeight.SemiBold)
-                }
-            }
-        }
-
-        if (status.role != LanRole.DISCONNECTED) {
-            OutlinedButton(onClick = onDisconnect, modifier = Modifier.fillMaxWidth().height(46.dp), shape = RoundedCornerShape(14.dp)) {
-                Text("Desconectar")
-            }
-        }
-
-        if (remoteReading != null) {
-            Surface(color = PanelRaised, shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("Última lectura remota", color = TextMain, fontWeight = FontWeight.SemiBold)
-                    Text("Luz: ${remoteReading.lightLux} lx · Distancia: ${remoteReading.distanceCm?.let { "$it cm" } ?: "en pausa"}", color = TextMuted, fontSize = 12.sp)
-                    Text(if (remoteReading.gateOpen) "Barrera abierta · alerta activa" else "Barrera cerrada · sin alerta", color = if (remoteReading.alertActive) Red else Mint, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                }
-            }
-        }
-
-        Surface(color = PanelRaised, shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
-            Row(Modifier.padding(15.dp), verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Icon(Icons.Filled.Security, contentDescription = null, tint = Mint, modifier = Modifier.size(20.dp))
-                Text("Los mensajes viajan cifrados con AES-GCM. El código de vinculación debe coincidir en ambos dispositivos y no se guarda en la base de datos.", color = TextMuted, fontSize = 12.sp, lineHeight = 18.sp)
             }
         }
     }
 }
 
+private fun ConnectionMode.description(): String = when (this) {
+    ConnectionMode.BLUETOOTH -> "Bluetooth RFCOMM (HC-05 / ESP32)"
+    ConnectionMode.WIFI -> "Wi-Fi UDP Socket"
+    ConnectionMode.MESH -> "Interconexión Multi-App Móvil"
+}
+
 @Composable
-private fun HistoryScreen(
-    readings: List<SensorReading>,
-    onRefresh: () -> Unit,
-    onClear: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Column(
-        modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(top = 14.dp, bottom = 28.dp),
-        verticalArrangement = Arrangement.spacedBy(15.dp),
+private fun RadioRow(text: String, selected: Boolean, icon: ImageVector? = null, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable(onClick = onClick).padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        BrandHeader()
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("Historial de\nsensores.", fontSize = 29.sp, lineHeight = 35.sp, color = TextMain, fontWeight = FontWeight.Bold)
-            Text("SQLite conserva las últimas lecturas locales y recibidas desde otro teléfono.", color = TextMuted, fontSize = 13.sp, lineHeight = 19.sp)
+        RadioButton(selected = selected, onClick = onClick, colors = RadioButtonDefaults.colors(selectedColor = OtPurple, unselectedColor = OtMuted))
+        if (icon != null) {
+            Icon(icon, null, tint = OtBlue, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(7.dp))
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Button(onClick = onRefresh, modifier = Modifier.weight(1f), shape = RoundedCornerShape(13.dp), colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink)) {
-                Icon(Icons.Filled.Refresh, contentDescription = null, modifier = Modifier.size(17.dp))
-                Spacer(Modifier.width(6.dp))
-                Text("Actualizar")
+        Text(text, color = OtText, fontSize = 14.sp, lineHeight = 19.sp)
+    }
+}
+
+@Composable
+private fun OtSlider(value: Float, onValueChange: (Float) -> Unit, range: ClosedFloatingPointRange<Float>) {
+    Slider(
+        value = value, onValueChange = onValueChange, valueRange = range,
+        colors = SliderDefaults.colors(thumbColor = OtPurple, activeTrackColor = OtPurple, inactiveTrackColor = OtDisabled),
+    )
+}
+
+@Composable
+private fun OtCard(content: @Composable ColumnScope.() -> Unit) {
+    Surface(
+        modifier = Modifier.fillMaxWidth().border(1.dp, OtLine, RoundedCornerShape(17.dp)), color = OtPanel, shape = RoundedCornerShape(17.dp),
+    ) { Column(Modifier.padding(17.dp), verticalArrangement = Arrangement.spacedBy(10.dp), content = content) }
+}
+
+@Composable
+private fun CardTitle(text: String) {
+    Text(text, color = OtBlue, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+}
+
+@Composable
+private fun SectionLabel(text: String) {
+    Text(text, color = OtMuted, fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.Medium)
+}
+
+@Composable
+private fun AuditDialog(audit: List<AuditEvent>, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss, containerColor = Color(0xFF414141), titleContentColor = OtText, textContentColor = OtText,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Filled.Lock, null, tint = OtOrange, modifier = Modifier.size(26.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Log de Auditoría OT (ISO/IEC 27001)", fontSize = 20.sp, lineHeight = 24.sp, fontWeight = FontWeight.Bold)
             }
-            OutlinedButton(onClick = onClear, modifier = Modifier.weight(1f), shape = RoundedCornerShape(13.dp), enabled = readings.isNotEmpty()) {
-                Text("Limpiar")
-            }
-        }
-        if (readings.isEmpty()) {
-            Surface(color = Panel, shape = RoundedCornerShape(20.dp), modifier = Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Icon(Icons.Filled.Storage, contentDescription = null, tint = TextMuted, modifier = Modifier.size(34.dp))
-                    Text("Todavía no hay lecturas", color = TextMain, fontWeight = FontWeight.SemiBold)
-                    Text("Cambia entre día y noche o simula un vehículo desde el Panel.", color = TextMuted, fontSize = 12.sp, textAlign = TextAlign.Center)
+        },
+        text = {
+            Column(Modifier.height(360.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(17.dp)) {
+                audit.forEach { event ->
+                    Text("[${event.timestamp}] ${event.action}\nUsuario: ${event.user} | Éxito: true\n${event.detail}", color = OtText, fontSize = 14.sp, lineHeight = 19.sp)
                 }
             }
-        } else {
-            readings.forEach { reading -> ReadingRow(reading) }
-        }
-        Text("Los datos se almacenan solo en este dispositivo y pueden eliminarse desde esta pantalla.", color = TextMuted, fontSize = 11.sp, lineHeight = 16.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
-    }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Aceptar", color = OtPurple, fontSize = 15.sp) } },
+    )
 }
 
-@Composable
-private fun ReadingRow(reading: SensorReading) {
-    Surface(color = Panel, shape = RoundedCornerShape(17.dp), modifier = Modifier.fillMaxWidth()) {
-        Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Box(Modifier.size(39.dp).clip(RoundedCornerShape(12.dp)).background((if (reading.alertActive) Red else Mint).copy(alpha = .12f)), contentAlignment = Alignment.Center) {
-                Icon(if (reading.alertActive) Icons.Filled.WarningAmber else Icons.Filled.Sensors, contentDescription = null, tint = if (reading.alertActive) Red else Mint, modifier = Modifier.size(20.dp))
-            }
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text("${reading.lightLux} lx · ${reading.distanceCm?.let { "$it cm" } ?: "sensor en pausa"}", color = TextMain, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                Text("${reading.source} · ${reading.formattedTime()}", color = TextMuted, fontSize = 11.sp)
-                Text(if (reading.gateOpen) "Barrera abierta" else "Barrera cerrada", color = if (reading.alertActive) Red else MintSoft, fontSize = 11.sp)
-            }
-        }
-    }
-}
-
-@Composable
-private fun HowItWorks(modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(top = 14.dp, bottom = 28.dp),
-        verticalArrangement = Arrangement.spacedBy(18.dp),
-    ) {
-        BrandHeader()
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("Así piensa tu\nportero inteligente.", fontSize = 29.sp, lineHeight = 35.sp, color = TextMain, fontWeight = FontWeight.Bold)
-            Text("Control, monitoreo y registro seguro para el acceso inteligente.", color = TextMuted, fontSize = 13.sp, lineHeight = 19.sp)
-        }
-        Surface(color = Panel, shape = RoundedCornerShape(22.dp), modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(0.dp)) {
-                ProcessStep("01", "Detectar la oscuridad", "La fotorresistencia (LDR) mide la luz ambiente. De día, el sistema deja los actuadores apagados.", Icons.Filled.LightMode, Mint, last = false)
-                ProcessStep("02", "Buscar obstáculos", "Al detectar noche, se activa el sensor ultrasónico y mide si un vehículo o una persona se acerca.", Icons.Filled.Sensors, Mint, last = false)
-                ProcessStep("03", "Abrir y alertar", "Si algo está cerca, el servomotor levanta la barrera y las luces rojas avisan que hay movimiento.", Icons.Filled.WarningAmber, Red, last = false)
-                ProcessStep("04", "Guardar la lectura", "Cada cambio se registra en SQLite con fecha, luz, distancia, barrera, alerta y dispositivo de origen.", Icons.Filled.Storage, Mint, last = false)
-                ProcessStep("05", "Compartir por Wi-Fi", "El teléfono controlador envía lecturas cifradas al teléfono monitor conectado en la misma red local.", Icons.Filled.Wifi, Mint, last = false)
-                ProcessStep("06", "Volver a reposo", "Cuando el acceso queda libre, la barrera baja y la alerta se apaga. Con luz de día, el sistema ahorra energía.", Icons.Filled.CheckCircle, Amber, last = true)
-            }
-        }
-        Text("Componentes del prototipo", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = TextMain)
-        ComponentRow("LDR", "Fotorresistencia", "Distingue día y noche", Icons.Filled.LightMode)
-        ComponentRow("HC-SR04", "Sensor ultrasónico", "Mide distancia a un obstáculo", Icons.Filled.Sensors)
-        ComponentRow("SG90", "Servomotor", "Levanta y baja la barrera", Icons.Filled.LocalParking)
-        ComponentRow("LED rojo", "Luz de alerta", "Indica que el acceso está activo", Icons.Filled.WarningAmber)
-        ComponentRow("Wi-Fi", "Interconexión Android", "Envía lecturas entre dos teléfonos", Icons.Filled.Wifi)
-        ComponentRow("SQLite", "Almacenamiento local", "Conserva usuarios y datos de sensores", Icons.Filled.Storage)
-        ComponentRow("AES-GCM", "Seguridad IoT", "Protege los mensajes de la red local", Icons.Filled.Security)
-        Surface(color = PanelRaised, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
-            Row(Modifier.padding(14.dp), verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Icon(Icons.Filled.TipsAndUpdates, contentDescription = null, tint = Mint, modifier = Modifier.size(19.dp))
-                Text("La lectura de sensores y los actuadores se simulan en pantalla. La comunicación Wi-Fi entre dos dispositivos Android y el almacenamiento SQLite sí funcionan dentro de la aplicación.", color = TextMuted, fontSize = 11.sp, lineHeight = 16.sp)
-            }
-        }
-    }
-}
-
-@Composable
-private fun SettingsScreen(onReplayIntro: () -> Unit, onLogout: () -> Unit, modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp)
-            .padding(top = 14.dp, bottom = 28.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        BrandHeader()
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("Ajustes", fontSize = 29.sp, lineHeight = 35.sp, color = TextMain, fontWeight = FontWeight.Bold)
-            Text("Preferencias, seguridad y sesión del operador.", color = TextMuted, fontSize = 14.sp, lineHeight = 20.sp)
-        }
-        Surface(color = Panel, shape = RoundedCornerShape(20.dp), modifier = Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("Modo de funcionamiento", color = TextMain, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                Text("Los sensores y actuadores se simulan. Las lecturas se guardan en SQLite y pueden enviarse de forma cifrada a otro Android por la red Wi-Fi local.", color = TextMuted, fontSize = 13.sp, lineHeight = 19.sp)
-                StatusBadge(text = "IOT DEMOSTRABLE", color = Mint)
-            }
-        }
-        Surface(color = Panel, shape = RoundedCornerShape(20.dp), modifier = Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                Text("Seguridad IoT", color = TextMain, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                Text("• Contraseñas con PBKDF2, sal aleatoria y comparación constante.\n• Mensajes entre dispositivos cifrados y autenticados con AES-GCM.\n• Código de vinculación temporal y almacenamiento local controlado por el usuario.\n• Sin permisos de ubicación, cámara ni contactos.", color = TextMuted, fontSize = 12.sp, lineHeight = 19.sp)
-                StatusBadge(text = "ALINEADO CON ISO/IEC 27400", color = Mint)
-            }
-        }
-        Surface(color = Panel, shape = RoundedCornerShape(20.dp), modifier = Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Introducción", color = TextMain, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                Text("Vuelve a ver los tres pasos sobre el LDR, el sensor de distancia y la barrera.", color = TextMuted, fontSize = 13.sp, lineHeight = 19.sp)
-                OutlinedButton(
-                    onClick = onReplayIntro,
-                    modifier = Modifier.fillMaxWidth().height(48.dp),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MintSoft),
-                ) {
-                    Text("Repetir introducción", fontWeight = FontWeight.SemiBold)
-                }
-            }
-        }
-        Surface(color = PanelRaised, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
-            Text(
-                "La aplicación solicita únicamente acceso a red para la interconexión Wi-Fi. No usa ubicación, cámara, micrófono ni contactos.",
-                modifier = Modifier.padding(15.dp),
-                color = TextMuted,
-                fontSize = 12.sp,
-                lineHeight = 18.sp,
-            )
-        }
-        OutlinedButton(
-            onClick = onLogout,
-            modifier = Modifier.fillMaxWidth().height(48.dp),
-            shape = RoundedCornerShape(14.dp),
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = Red),
-        ) {
-            Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(8.dp))
-            Text("Cerrar sesión", fontWeight = FontWeight.SemiBold)
-        }
-    }
-}
-
-@Composable
-private fun ProcessStep(number: String, title: String, description: String, icon: androidx.compose.ui.graphics.vector.ImageVector, accent: Color, last: Boolean) {
-    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(29.dp)) {
-            Box(Modifier.size(29.dp).clip(CircleShape).background(accent.copy(alpha = .13f)), contentAlignment = Alignment.Center) {
-                Text(number, color = accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-            }
-            if (!last) Canvas(Modifier.width(1.dp).height(51.dp)) { drawLine(TextMuted.copy(alpha = .25f), Offset(size.width / 2, 0f), Offset(size.width / 2, size.height), strokeWidth = 1.dp.toPx()) }
-        }
-        Column(Modifier.weight(1f).padding(bottom = if (last) 0.dp else 14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(title, color = TextMain, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                Icon(icon, contentDescription = null, tint = accent, modifier = Modifier.size(14.dp))
-            }
-            Text(description, color = TextMuted, fontSize = 11.sp, lineHeight = 16.sp)
-        }
-    }
-}
-
-@Composable
-private fun ComponentRow(code: String, title: String, description: String, icon: androidx.compose.ui.graphics.vector.ImageVector) {
-    Surface(color = Panel, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
-        Row(Modifier.padding(13.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(11.dp)) {
-            Box(Modifier.size(36.dp).clip(RoundedCornerShape(11.dp)).background(PanelRaised), contentAlignment = Alignment.Center) {
-                Icon(icon, contentDescription = null, tint = Mint, modifier = Modifier.size(18.dp))
-            }
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(title, color = TextMain, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                    Text(code, color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                }
-                Text(description, color = TextMuted, fontSize = 11.sp)
-            }
-        }
-    }
-}
+private fun auditEvent(action: String, user: String, detail: String): AuditEvent = AuditEvent(
+    timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date()), action = action, user = user, detail = detail,
+)

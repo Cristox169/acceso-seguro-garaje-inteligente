@@ -157,10 +157,10 @@ class AppDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_N
     }
 
     companion object {
-        const val DEMO_USER = "operador"
-        const val DEMO_PASSWORD = "Acceso2026!"
+        const val DEMO_USER = "admin"
+        const val DEMO_PASSWORD = "Admin123!"
         private const val DATABASE_NAME = "acceso_seguro.db"
-        private const val DATABASE_VERSION = 1
+        private const val DATABASE_VERSION = 2
         private const val PBKDF2_ITERATIONS = 120_000
         private const val HASH_BITS = 256
     }

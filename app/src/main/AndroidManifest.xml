@@ -5,7 +5,7 @@
 
     <application
         android:allowBackup="true"
-        android:label="Acceso Seguro"
+        android:label="Sistema Control de Acceso OT"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"

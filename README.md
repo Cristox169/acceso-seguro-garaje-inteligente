@@ -1,4 +1,4 @@
-# Acceso Seguro — Portero Inteligente
+# Sistema Control de Acceso OT — Portero Inteligente
 
 Aplicación Android en Kotlin y Jetpack Compose que presenta y simula el circuito de una barrera de estacionamiento activada por oscuridad.
 
@@ -14,36 +14,36 @@ Abre la carpeta `GarajeInteligente` como proyecto. Gradle sincronizará las depe
 
 ## Probar la simulación
 
-- Inicia sesión con **operador** y la contraseña **Acceso2026!**.
-- Cambia entre **Día** y **Noche** para ver cuándo se activa el sensor ultrasónico.
-- En modo noche, pulsa **Simular vehículo acercándose**: la barrera se levanta y las luces rojas se encienden.
-- Pulsa **Retirar vehículo y reiniciar** para cerrar la barrera y apagar la alerta.
-- Abre **Cómo funciona** para ver los componentes y la secuencia del circuito.
-- En **Ajustes** puedes repetir la introducción y revisar que esta versión trabaja como simulador local.
+- Inicia sesión con **admin** y la contraseña **Admin123!**.
+- En **Monitoreo**, mueve los controles del sensor ultrasónico y de la fotorresistencia LDR.
+- Si la luz baja del umbral y la distancia es menor al límite, la barrera se abre y se enciende el LED rojo.
+- En **Activador**, selecciona el modo automático o fuerza la barrera abierta o cerrada.
+- Ajusta los umbrales dinámicos, activa la anulación de emergencia y envía comandos inalámbricos.
+- En **Conexión Inalámbrica**, elige Bluetooth, Wi-Fi o malla móvil y revisa la estabilidad del enlace.
+- Pulsa **Auditoría** para consultar los eventos de acceso y operación registrados durante la sesión.
 
-## Conectar dos dispositivos Android
+## Probar la conexión inalámbrica
 
-1. Instala la aplicación en dos teléfonos conectados a la misma red Wi-Fi.
-2. En el primer teléfono abre **Conexión**, conserva o cambia el código de vinculación y pulsa **Este teléfono controla**.
-3. En el segundo teléfono abre **Conexión**, escribe la IP que muestra el primer dispositivo, usa el mismo código y pulsa **Conectar este teléfono como monitor**.
-4. Cambia el escenario desde el panel del teléfono controlador. Las lecturas cifradas aparecerán en el monitor y se guardarán en su historial.
+1. Abre **Conexión Inalámbrica**.
+2. Selecciona Bluetooth, Wi-Fi UDP o interconexión móvil.
+3. Pulsa **Conectar** para iniciar la simulación de enlace.
+4. Revisa la latencia, la pérdida, los paquetes y la intensidad RSSI mostrados en pantalla.
 
-La interconexión usa el puerto TCP `40404` y cifra cada mensaje con AES-GCM. Ambos teléfonos deben permanecer en la misma red local y cualquier aislamiento de clientes configurado en el router debe estar desactivado.
-
-En el primer inicio aparece una introducción breve de tres pasos. Puedes omitirla y no volverá a aparecer después de completarla.
-
-La aplicación simula los sensores y actuadores del prototipo. La autenticación, el almacenamiento SQLite y la comunicación Wi-Fi entre dos dispositivos Android son funcionales.
+La aplicación simula los sensores, actuadores y conexiones del prototipo. La autenticación y el almacenamiento de credenciales en SQLite sí funcionan localmente.
 
 ## Funciones incluidas
 
 - Pantalla inicial compatible con SplashScreen.
-- Introducción de tres pasos que se muestra en el primer inicio.
+- Acceso OT con usuario y contraseña de prueba.
 - Panel para simular luz ambiental, distancia, barrera y luces de alerta.
+- Modos automático y manual del servomotor.
+- Anulación de emergencia y calibración de umbrales.
+- Selector de conexión Bluetooth, Wi-Fi y malla móvil.
+- Registro visible de auditoría alineado con ISO/IEC 27001.
 - Autenticación local con credenciales protegidas mediante PBKDF2, sal aleatoria y SQLite.
-- Interconexión Wi-Fi entre un teléfono controlador y otro monitor.
-- Mensajes cifrados y autenticados con AES-GCM y código de vinculación temporal.
-- Historial SQLite de lecturas locales y remotas.
-- Secciones **Conexión**, **Datos**, **Sistema** y **Ajustes** mediante navegación inferior.
+- Simulación visual de conexiones Bluetooth, Wi-Fi UDP y malla móvil.
+- Contadores de paquetes, latencia, pérdida y RSSI para la demostración.
+- Secciones **Monitoreo**, **Activador** y **Conexión Inalámbrica** mediante pestañas.
 - Textos y descripciones preparados para accesibilidad.
 
 ## Relación con la guía TI3042 Unidad 2
